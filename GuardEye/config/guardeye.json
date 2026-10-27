@@ -1,0 +1,105 @@
+{
+  // GuardEye configuration. Comments are allowed. Copy to /etc/guardeye/guardeye.json for deployment.
+  // Secrets can also come from the environment: GUARDEYE_TELEGRAM_TOKEN, GUARDEYE_TELEGRAM_CHAT_ID,
+  // GUARDEYE_HTTP_TOKEN, GUARDEYE_MQTT_PASSWORD (see systemd/guardeye.env.example).
+
+  "camera": {
+    // IP camera SUB-stream (low resolution) for AI. Also accepts a video file path or a webcam index ("0").
+    "url": "rtsp://user:pass@192.168.1.10:554/stream2",
+    "codec": "h264",
+    "use_gstreamer": true,
+    "rtsp_tcp": true,
+    "latency_ms": 100,
+    "width": 640,
+    "height": 360,
+    "loop_file": true,
+    "offline_alert_seconds": 30
+  },
+
+  "detector": {
+    "mode": "yolo",                      // "yolo" | "motion_only" (demo without a model; NOT for real use)
+    "model_path": "models/yolov8n.onnx", // create it with scripts/export_model.py
+    "input_size": 320,                   // 320 = fast on a Pi, 640 = more accurate for small/far people
+    "conf": 0.45,
+    "nms": 0.45,
+    "person_class": 0,
+    "min_box_height_frac": 0.08,
+    "num_threads": 0
+  },
+
+  "motion": {
+    "enabled": true,           // set false to benchmark CPU without the gate
+    "analysis_width": 160,
+    "blur": 5,
+    "pixel_threshold": 25,
+    "area_percent": 0.5,
+    "hold_seconds": 8,
+    "heartbeat_seconds": 5,
+    "bg_alpha": 0.02
+  },
+
+  // Restricted zone, normalised 0..1 (x right, y down). Edit it by clicking on the live view in the dashboard.
+  "zone": { "polygon": [[0.15, 0.30], [0.85, 0.30], [0.90, 0.95], [0.10, 0.95]] },
+
+  "logic": {
+    "confirm_seconds": 2.0,
+    "min_hits": 5,
+    "gap_tolerance_seconds": 1.0,
+    "suspect_timeout_seconds": 6,
+    "door_window_seconds": 10,
+    "door_min_hits": 1,
+    "alarm_max_seconds": 120,
+    "rearm_cooldown_seconds": 10,
+    "light_on_suspect": true
+  },
+
+  "schedule": { "enabled": false, "arm": "21:00", "disarm": "07:00" },
+
+  "hardware": {
+    "mode": "auto",                // "auto" = real devices if present, else simulate | "real" = fail if missing | "sim"
+    "gpio_chip": "gpiochip0",      // Raspberry Pi 5: "gpiochip4"
+    "i2c_dev": "/dev/i2c-1",
+    "spi_dev": "/dev/spidev0.0",
+    "rtc_enabled": true,
+    "ina219_enabled": true,
+    "ina219_addr": 64,             // 0x40
+    "shunt_ohm": 0.1,
+    "oled_enabled": true,
+    "battery_low_v": 11.2,
+    "battery_critical_v": 10.8,
+    "shutdown_on_critical": false,
+    // GPIO line numbers (BCM). See docs/WIRING.md. active_low = logical ON is electrical LOW.
+    "pins": {
+      "siren":      { "line": 17, "active_low": true },
+      "light":      { "line": 18, "active_low": true },
+      "reed":       { "line": 27, "pull_up": true, "active_low": false },  // door OPEN = pin HIGH
+      "button":     { "line": 22, "pull_up": true, "active_low": true },   // pressed = pin LOW
+      "led_status": { "line": 5 },
+      "oled_dc":    { "line": 25 },
+      "oled_rst":   { "line": 24 }
+      // "mains":   { "line": 6, "pull_up": true, "active_low": false }   // optional: HIGH = mains OK
+    }
+  },
+
+  "alerts": {
+    "notify_arm_disarm": true,
+    "retry_max": 5,
+    "telegram": { "enabled": false, "token": "", "chat_id": "" },
+    "mqtt": { "enabled": false, "host": "127.0.0.1", "port": 1883, "topic_prefix": "guardeye/shop1", "username": "", "password": "" }
+  },
+
+  "http": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "token": "",                   // REQUIRED for real use: dashboard asks for it
+    "web_dir": "web"
+  },
+
+  "storage": {
+    "data_dir": "./data",          // deployment: /var/lib/guardeye (put it on a USB SSD)
+    "pre_seconds": 10,
+    "post_seconds": 30,
+    "clip_fps": 10,
+    "keep_days": 14
+  }
+}
