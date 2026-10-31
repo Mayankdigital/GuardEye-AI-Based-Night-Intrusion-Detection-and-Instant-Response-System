@@ -1,0 +1,87 @@
+AZURE SETUP - 1 GB VM (light ONNX server)
+=========================================
+
+Use this when Azure only offers 1 GiB sizes (e.g. Standard_B2ats_v2).
+Your laptop setup (IOT_PRo\start_server.bat, app.py, pi\config.env) is NOT changed.
+The Pi client and Pi files are the same as in AZURE_SETUP.txt.
+
+Folder:  azure\server_1gb\   app_onnx.py, requirements.txt, setup_azure_vm_1gb.sh
+         (+ best.onnx after step 1)
+Secret key:  YOUR_AZURE_API_KEY
+
+
+STEP 1 - Convert your model to ONNX  (laptop, 2-3 min)
+-----------------------------------
+Double-click  IOT_PRo\azure\export_onnx.bat
+It creates  azure\server_1gb\best.onnx  (about 10 MB).
+(start_server.bat must have been run at least once before - it already was.)
+
+
+STEP 2 - Create the VM  (Azure portal)
+----------------------
+Same as AZURE_SETUP.txt step 1, with:
+   Region: (Asia Pacific) Central India
+   Image:  Ubuntu Server 24.04 LTS - x64 Gen2
+   Size:   Standard_B2ats_v2 (2 vcpus, 1 GiB)  <- fine for this version
+   Authentication: Password, username azureuser
+   Inbound ports: SSH (22), HTTP (80), HTTPS (443)
+Then set the DNS name label (AZURE_SETUP.txt step 2), e.g. YOUR-DNS-NAME
+-> YOUR-DNS-NAME.centralindia.cloudapp.azure.com
+
+
+STEP 3 - Copy the files to the VM  (laptop PowerShell)
+---------------------------------
+   scp -r "C:\path\to\SecureHome\azure\server_1gb" azureuser@YOUR-DNS-NAME.centralindia.cloudapp.azure.com:~/azure_server
+
+
+STEP 4 - Install and start  (SSH into the VM, about 5 min)
+--------------------------
+   ssh azureuser@YOUR-DNS-NAME.centralindia.cloudapp.azure.com
+   cd ~/azure_server
+   sed -i 's/\r$//' setup_azure_vm_1gb.sh
+   bash setup_azure_vm_1gb.sh YOUR-DNS-NAME.centralindia.cloudapp.azure.com
+
+It ends with "SERVER IS RUNNING" and your links.
+Test:  https://YOUR-DNS-NAME.centralindia.cloudapp.azure.com/health
+       should show "engine":"onnxruntime" and your 2 classes.
+
+
+STEP 5 - Raspberry Pi
+---------------------
+Same as AZURE_SETUP.txt step 5 (copy config_azure.env, set SERVER_URL=wss://your-dns-name).
+For the small VM, in ~/pi/config_azure.env set:
+   MAX_FPS=3
+
+Run in Azure mode:
+   cd ~/pi
+   set -a; source config_azure.env; set +a
+   ./venv/bin/python stream_client.py
+Run in laptop mode (unchanged):
+   cd ~/pi
+   set -a; source config.env; set +a
+   ./venv/bin/python stream_client.py
+
+Viewer from anywhere:
+   https://YOUR-DNS-NAME.centralindia.cloudapp.azure.com/?key=YOUR_AZURE_API_KEY
+
+
+NOTES
+-----
+Speed: about 2-5 FPS at first; the 1 GB "burstable" VM slows down under constant load,
+then about 1-3 FPS. Alerts still arrive within 1-2 seconds.
+New model later: put the new best.pt in azure\server\, run export_onnx.bat, copy
+server_1gb\best.onnx to ~/azure_server/ on the VM, then:  sudo systemctl restart mask-server
+Logs on the VM:   journalctl -u mask-server -f
+Memory on the VM: free -h
+
+
+PROBLEMS
+--------
+export_onnx.bat: "conversion failed"
+   -> send me the red error text.
+VM: "best.onnx not found"
+   -> run export_onnx.bat first, then copy the server_1gb folder again (step 3).
+https link doesn't open but /health works on the VM
+   -> VM -> Networking -> add inbound rules for ports 80 and 443;
+      check  journalctl -u caddy -n 50 --no-pager
+Pi "HTTP 403"  -> API_KEY mismatch (must be YOUR_AZURE_API_KEY).

@@ -1,0 +1,136 @@
+AZURE SETUP - covered face alert (Azure for Students)
+=====================================================
+
+This folder is SEPARATE from your working laptop setup.
+Nothing in IOT_PRo (start_server.bat, app.py, pi\config.env) is changed.
+On the Pi you only ADD config_azure.env, and choose laptop or Azure mode when starting.
+
+Folder contents:
+  server\    app.py, best.pt, requirements.txt, setup_azure_vm.sh   -> copy to the Azure VM
+  pi_azure\  config_azure.env, mask-alert-azure.service             -> copy to the Pi
+
+Cost: a 2-CPU / 4 GB VM running 24/7 is roughly 40 dollars a month, paid from your
+student credit (9,599 dollars). No credit card, no bill. The credit expires on
+27/12/2026 - after that the VM stops until the subscription is renewed.
+
+Secret key for Azure mode:  YOUR_AZURE_API_KEY
+
+
+STEP 1 - Create the VM  (Azure portal, 10 min)
+---------------------
+1. https://portal.azure.com -> search "Virtual machines" -> + Create -> Azure virtual machine
+2. Basics tab:
+     Subscription:        Azure for Students
+     Resource group:      Create new -> mask-alert-rg
+     Virtual machine name: mask-server
+     Region:              (Asia Pacific) Central India
+                          (if you get a "not allowed" / "not available" error, try South India
+                           or another region the error message lists)
+     Availability options: No infrastructure redundancy required
+     Security type:       Standard
+     Image:               Ubuntu Server 24.04 LTS - x64 Gen2
+     Size:                See all sizes -> Standard_B2s (2 vcpus, 4 GiB)
+                          (if not available: Standard_B2als_v2 or Standard_B2as_v2)
+     Authentication type: Password
+     Username:            azureuser
+     Password:            choose one and remember it
+     Public inbound ports: Allow selected ports
+     Select inbound ports: SSH (22), HTTP (80), HTTPS (443)    <- tick all three
+3. Click "Review + create" -> "Create". Wait 1-2 minutes -> "Go to resource".
+
+
+STEP 2 - Give the VM a name address (DNS)  (2 min)
+-----------------------------------------
+1. On the VM Overview page, find "DNS name: Not configured" -> click it.
+2. DNS name label: e.g.  YOUR-DNS-NAME   -> Save.
+3. Your address is now:  YOUR-DNS-NAME.centralindia.cloudapp.azure.com
+   (shown on the Overview page as "DNS name"). Write it down.
+4. Also note the "Public IP address".
+
+Check auto-shutdown: VM menu -> Operations -> Auto-shutdown -> make sure it is OFF
+(if you want it running all the time).
+
+
+STEP 3 - Copy the server files to the VM  (laptop PowerShell)
+----------------------------------------
+   scp -r "C:\path\to\SecureHome\azure\server" azureuser@YOUR-DNS-NAME.centralindia.cloudapp.azure.com:~/azure_server
+
+(use your DNS name; answer "yes" to the fingerprint question; type the VM password)
+
+
+STEP 4 - Install and start the server  (SSH into the VM, 10-15 min)
+-------------------------------------
+   ssh azureuser@YOUR-DNS-NAME.centralindia.cloudapp.azure.com
+   cd ~/azure_server
+   sed -i 's/\r$//' setup_azure_vm.sh
+   bash setup_azure_vm.sh YOUR-DNS-NAME.centralindia.cloudapp.azure.com
+
+At the end it prints "SERVER IS RUNNING" and your links.
+Test in a browser:   https://YOUR-DNS-NAME.centralindia.cloudapp.azure.com/health
+The server starts by itself after every VM reboot.
+
+
+STEP 5 - Raspberry Pi  (5 min)
+---------------------
+1. Laptop PowerShell - copy the 2 Pi files:
+
+   scp "C:\path\to\SecureHome\azure\pi_azure\config_azure.env" "C:\path\to\SecureHome\azure\pi_azure\mask-alert-azure.service" mayank@YOUR_PI_IP:~/pi/
+
+2. On the Pi (SSH):
+      cd ~/pi
+      sed -i 's/\r$//' config_azure.env mask-alert-azure.service
+      nano config_azure.env
+   Set  SERVER_URL=wss://YOUR-DNS-NAME.centralindia.cloudapp.azure.com   (your DNS name)
+   Ctrl+O, Enter, Ctrl+X.
+
+3. Run in AZURE mode:
+      cd ~/pi
+      set -a; source config_azure.env; set +a
+      ./venv/bin/python stream_client.py
+
+   Run in LAPTOP mode (unchanged, as before):
+      cd ~/pi
+      set -a; source config.env; set +a
+      ./venv/bin/python stream_client.py
+
+   You should see "Connected to wss://...cloudapp.azure.com" and FPS lines.
+
+4. Viewer from anywhere (phone on mobile data too):
+      https://YOUR-DNS-NAME.centralindia.cloudapp.azure.com/?key=YOUR_AZURE_API_KEY
+
+
+AUTO-START IN AZURE MODE (optional - only one Pi service at a time)
+-------------------------------------------------------------
+   sudo cp ~/pi/mask-alert-azure.service /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl disable --now mask-alert           (stop laptop-mode service if enabled)
+   sudo systemctl enable --now mask-alert-azure
+   journalctl -u mask-alert-azure -f                 (logs)
+
+Back to laptop mode:
+   sudo systemctl disable --now mask-alert-azure
+   sudo systemctl enable --now mask-alert
+
+
+USEFUL COMMANDS ON THE VM
+-------------------------
+   sudo systemctl status mask-server           is it running?
+   journalctl -u mask-server -f                live server log
+   sudo systemctl restart mask-server          restart (e.g. after replacing best.pt)
+New model: copy the new best.pt to ~/azure_server/ on the VM (scp) and restart.
+Save credit when not needed: portal -> VM -> Stop (Start again later; the DNS name stays).
+
+
+PROBLEMS
+--------
+VM create error "RequestDisallowedByAzure" / region not allowed
+   -> student subscriptions only allow some regions; pick one the error lists.
+Size not available
+   -> pick another 2 vCPU / 4 GiB size (B2als_v2, B2as_v2, D2as_v5).
+https:// link doesn't open, but /health works on the VM
+   -> ports 80/443 not open: VM -> Networking -> Add inbound port rule -> 80 and 443.
+   -> check Caddy:  journalctl -u caddy -n 50 --no-pager
+Pi: "HTTP 403"
+   -> API_KEY in config_azure.env differs from setup_azure_vm.sh.
+Pi: "Connection problem"
+   -> check SERVER_URL starts with wss:// and the VM is Running in the portal.

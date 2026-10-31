@@ -1,0 +1,23 @@
+# --- secrets: NEVER commit these ---
+config.env
+config_azure.env
+*.env
+!*.example.env
+vapid_private.pem
+push_subscriptions.json
+assetlinks.json
+*.pem
+*.key
+
+# --- runtime data ---
+alerts/
+sh-icon-*.png
+icon-*.png
+.ultralytics/
+
+# --- python / build ---
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.log

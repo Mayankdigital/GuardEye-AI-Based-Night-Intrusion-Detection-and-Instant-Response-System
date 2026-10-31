@@ -1,0 +1,16 @@
+[Unit]
+Description=Covered face alert - streams Pi camera to cloud
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=__USER__
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=__APP_DIR__/config.env
+# add --usb at the end of the next line if you use a USB webcam
+ExecStart=__APP_DIR__/venv/bin/python __APP_DIR__/stream_client.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,65 @@
+COVERED FACE ALERT - laptop server + Raspberry Pi
+=================================================
+
+Your model (best.pt) detects 2 classes: face, covered_face.
+The laptop runs YOLO. The Pi only sends camera frames and sounds the alert.
+Laptop and Pi must be on the SAME Wi-Fi.
+
+
+A) LAPTOP (Windows)
+-------------------
+1. Install Python 3.11 or 3.12 from https://www.python.org/downloads/
+   During install tick "Add python.exe to PATH".
+2. Double-click  start_server.bat
+   - First run installs packages (5-15 min). Later runs start in seconds.
+   - It prints your laptop IP, e.g.  IPv4 Address . . : 192.168.1.5
+   - Windows Firewall popup: tick "Private networks" -> Allow.
+3. Test in the laptop browser:
+      http://localhost:7860/health          -> shows "ok": true and your classes
+      http://localhost:7860/?key=YOUR_LAPTOP_API_KEY   -> viewer ("Camera offline" until the Pi connects)
+
+Tip: so the IP doesn't change every day, reserve it in your router's settings
+(DHCP reservation), or just check it each time start_server.bat runs.
+
+
+B) RASPBERRY PI
+---------------
+1. Copy the "pi" folder to the Pi (USB stick, or WinSCP).
+2. On the Pi:
+      cd pi
+      bash setup_pi.sh
+3. Edit the settings, put your laptop IP:
+      nano config.env          (SERVER_URL=ws://192.168.1.5:7860)
+4. Test:
+      set -a; source config.env; set +a
+      ./venv/bin/python stream_client.py          (add --usb for a USB webcam)
+   You should see "Connected to ws://..." and an FPS line every 5 seconds.
+5. Auto-start on boot (optional):
+      sudo systemctl enable --now mask-alert
+      journalctl -u mask-alert -f                  (logs)
+
+Buzzer: + to GPIO17 (pin 11), - to GND (pin 6). Active buzzer.
+Snapshots of alerts are saved on the Pi in pi/alerts/.
+
+
+C) WATCH IT
+-----------
+Phone or laptop on the same Wi-Fi:
+   http://YOUR_LAPTOP_IP:7860/?key=YOUR_LAPTOP_API_KEY
+
+
+PROBLEMS
+--------
+Pi says "Connection problem ... timed out"
+   -> Windows Firewall is blocking. Open "Windows Defender Firewall" ->
+      "Allow an app through firewall" -> tick Python (Private + Public),
+      or set your Wi-Fi to "Private network" in Windows Wi-Fi settings.
+   -> Check the IP in config.env matches the laptop's current IP.
+Pi says "HTTP 403"
+   -> API_KEY in config.env differs from start_server.bat.
+Viewer says "Wrong or missing ?key="
+   -> add ?key=YOUR_LAPTOP_API_KEY to the address.
+Too many false alerts
+   -> CONFIRM_FRAMES=5 in config.env, or set CONF=0.6 in start_server.bat.
+"python is not recognized"
+   -> reinstall Python and tick "Add python.exe to PATH".

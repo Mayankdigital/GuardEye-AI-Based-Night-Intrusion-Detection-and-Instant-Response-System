@@ -1,0 +1,15 @@
+[Unit]
+Description=Covered face alert - streams Pi camera to Azure
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=mayank
+WorkingDirectory=/home/mayank/pi
+EnvironmentFile=/home/mayank/pi/config_azure.env
+ExecStart=/home/mayank/pi/venv/bin/python /home/mayank/pi/stream_client.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

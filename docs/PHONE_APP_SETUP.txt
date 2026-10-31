@@ -1,0 +1,90 @@
+PHONE APP - live video + covered-face and tampering alerts
+=========================================================
+
+The app is served by your Azure server. No Flutter, no Android Studio.
+It shows: live video, alert list with snapshots, push notifications
+(also when the app is closed) for:
+   - covered face detected
+   - camera tampering
+
+App address:   https://YOUR-DNS-NAME.centralindia.cloudapp.azure.com/app?key=YOUR_AZURE_API_KEY
+
+Files changed:
+   azure\server_1gb\  app_onnx.py, events.py (new), requirements.txt, update_server.sh (new)
+   pi\                stream_client.py   (sends alerts to the server)
+   app.py, events.py  (laptop server: accepts the alerts; live view + alert list at /app,
+                       notifications only work on the https Azure server)
+
+
+STEP 1 - Update the Azure server  (laptop cmd window, prompt C:\Users\YOUR_USER>)
+--------------------------------
+   scp "C:\path\to\SecureHome\azure\server_1gb\app_onnx.py" "C:\path\to\SecureHome\azure\server_1gb\events.py" "C:\path\to\SecureHome\azure\server_1gb\requirements.txt" "C:\path\to\SecureHome\azure\server_1gb\update_server.sh" azureuser@YOUR-DNS-NAME.centralindia.cloudapp.azure.com:~/azure_server/
+
+Then log in to the VM and run the update:
+   ssh azureuser@YOUR-DNS-NAME.centralindia.cloudapp.azure.com
+   cd ~/azure_server
+   sed -i 's/\r$//' update_server.sh
+   bash update_server.sh
+It should print "Server running" and "Push notifications enabled".
+
+
+STEP 2 - Update the Pi  (laptop cmd window)
+----------------------
+   scp "C:\path\to\SecureHome\pi\stream_client.py" "C:\path\to\SecureHome\pi\tamper.py" mayank@YOUR_PI_IP:~/pi/
+
+Then on the Pi (prompt mayank@raspberrypi):
+   cd ~/pi
+   sed -i 's/\r$//' stream_client.py tamper.py
+   set -a; source config_azure.env; set +a
+   ./venv/bin/python stream_client.py
+
+
+STEP 3 - Install the app on the phone  (Android, Chrome)
+-------------------------------------
+1. Open in Chrome on the phone:
+      https://YOUR-DNS-NAME.centralindia.cloudapp.azure.com/app?key=YOUR_AZURE_API_KEY
+2. Chrome menu (three dots) -> "Add to Home screen" -> "Install".
+   A "Mask Alert" icon appears on the home screen. Open the app from there.
+3. In the app: Settings -> "Turn on notifications" -> Allow.
+4. Settings -> "Send test notification" - you should get a notification.
+5. Optional: Android Settings -> Apps -> Chrome (or Mask Alert) -> Battery ->
+   "Unrestricted", so notifications arrive quickly even when the phone sleeps.
+
+The key is remembered; next time just open the app icon.
+
+
+OPTIONAL - Make a real .apk file  (PWABuilder, free, no install, about 5 min)
+-------------------------------------------------------------------------
+1. On the laptop open  https://www.pwabuilder.com
+2. Enter:  https://YOUR-DNS-NAME.centralindia.cloudapp.azure.com/app   -> Start
+3. "Package for stores" -> Android -> "Generate package" (defaults are fine) -> Download.
+4. Unzip it. Copy the .apk file to the phone and open it to install
+   (allow "Install unknown apps" when Android asks).
+5. Open the app -> Settings -> enter the key  YOUR_AZURE_API_KEY  -> Save
+   -> "Turn on notifications".
+
+To remove the address bar at the top of the APK app:
+   copy the assetlinks.json from the PWABuilder zip to the VM and restart:
+      scp assetlinks.json azureuser@YOUR-DNS-NAME.centralindia.cloudapp.azure.com:~/azure_server/
+      (on the VM)  sudo systemctl restart mask-server
+   then close and reopen the app.
+
+
+HOW ALERTS FLOW
+---------------
+Pi detects covered face (3 frames in a row)  -> buzzer + event to server -> phone notification
+Pi detects tampering (IR + blocked 15 s)     -> buzzer + event to server -> phone notification
+If the internet is down, the Pi keeps up to 20 alerts and sends them when it reconnects.
+
+
+PROBLEMS
+--------
+"Push notifications disabled" in update_server.sh output
+   -> run on the VM:  ~/azure_server/venv/bin/pip install pywebpush  then  sudo systemctl restart mask-server
+No "Add to Home screen"/"Install" in Chrome
+   -> make sure you opened the https:// address (not http) in Chrome.
+Test notification doesn't arrive
+   -> Settings in the app should say "Notifications are ON"; check Android notification
+      settings for Chrome/Mask Alert are allowed; turn battery restriction off.
+App says "Wrong key"
+   -> Settings -> enter YOUR_AZURE_API_KEY -> Save.
